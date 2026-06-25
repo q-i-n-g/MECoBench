@@ -1,0 +1,9 @@
+-e ./virtualhome
+numpy
+openai
+opencv-python
+Pillow
+python-dotenv
+PyYAML
+requests
+tqdm

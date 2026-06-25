@@ -1,0 +1,48 @@
+{
+  "gpt-5-mini": {
+    "model": "gpt-5-mini",
+    "api_key_env": "OPENAI_API_KEY",
+    "base_url_env": "OPENAI_BASE_URL"
+  },
+  "gpt-5-mini-2": {
+    "model": "gpt-5-mini",
+    "api_key_env": "OPENAI_API_KEY",
+    "base_url_env": "OPENAI_BASE_URL"
+  },
+  "gpt-5.4-nano": {
+    "model": "gpt-5.4-nano",
+    "api_key_env": "OPENAI_API_KEY",
+    "base_url_env": "OPENAI_BASE_URL"
+  },
+  "text-embedding-3-large": {
+    "model": "text-embedding-3-large",
+    "api_key_env": "OPENAI_API_KEY",
+    "base_url_env": "OPENAI_BASE_URL"
+  },
+  "qwen-8b-vl": {
+    "base_url": "http://localhost:8002/v1",
+    "base_url_env": "QWEN_8B_BASE_URL",
+    "model": "qwen-8b-vl",
+    "api_key_env": "QWEN_API_KEY",
+    "generation_config": {
+      "top_p": 0.8,
+      "top_k": 20,
+      "temperature": 0.7,
+      "presence_penalty": 1.5,
+      "max_output_tokens": 16384
+    }
+  },
+  "qwen-32b-vl": {
+    "base_url": "http://localhost:8001/v1",
+    "base_url_env": "QWEN_32B_BASE_URL",
+    "model": "qwen-32b-vl",
+    "api_key_env": "QWEN_API_KEY",
+    "generation_config": {
+      "top_p": 0.8,
+      "top_k": 20,
+      "temperature": 0.7,
+      "presence_penalty": 1.5,
+      "max_output_tokens": 16384
+    }
+  }
+}

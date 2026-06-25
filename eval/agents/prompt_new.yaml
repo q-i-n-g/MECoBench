@@ -1,0 +1,559 @@
+SYSTEM_PROMPT_SINGLE: |
+  You are $NAME$.
+  You are in a household environment. You can interact with the environment by performing actions. 
+
+  You should complete the task while minimizing the total number of action steps. The task goal is:
+  $GOAL$
+
+SYSTEM_PROMPT_MULTI: |
+  You are $NAME$.
+  You are in a household environment with other agents: $OTHER_NAMES$. You can interact with the environment by performing actions. 
+
+  You should collaborate with other agents to complete the housework task while minimizing the total number of action steps taken by all agents. The task goal is:
+  $GOAL$
+
+
+PLAN_BLOCK_COMMUNICATION: |
+  ## Communication
+
+  Send a message if it is helpful for task progress and remain silent if the message would be redundant, speculative, or misleading.
+  Your goal is to complete the task with the **smallest number of action steps**. Therefore, avoid waiting or letting others wait. We should all actively engage and search for tasks to contribute to.
+  The valid actions we can take are: $VALID_ACTIONS$. Each agent can only perform one action at a time, and can hold at most two objects at a time. 
+
+  ### MESSAGE Output Format
+  - If silent, output exactly:
+    <NO_MESSAGE>
+  - Otherwise, output the message text ONLY.
+
+COMM_BLOCK_RESTRICTED_HANDOVER: |
+  ## Handover Protocol
+
+  Agent-to-agent handover may be required to finish the task.
+  If two agents are in different rooms, the handover meeting point MUST be the door between those rooms.
+
+  ### Step-by-step handover procedure
+  1. **Communicate first**: agree on which door to meet at (use the door_id from department topology) The door should between the two rooms the two agents are allowed to access.
+  2. **Walk to the door**: both agents walk to the agreed `door_id`.
+  3. **Confirm arrival**: after arriving, send a message confirming you are at the door. You must check your last action is walk to the right door id.
+  4. **Handover and receive on the same step**:
+     - The giver uses `handover` (parameter_1 = held object, parameter_2 = receiver agent name).
+     - The receiver uses `receive`.
+  5. **If handover fails**: do NOT retry blindly. Communicate and walk to the right door again first, then retry.
+
+  ### Important rules
+  - Both giver and receiver must walk to the door before handover. No other actions after walk to the door except wait/receive on the receiver side and handover on the giver side.
+  - You are confirmed to be at the handover door ONLY if your latest successful movement to the handover point was `walk` to the agreed `door_id`, and you have not done any other walk/grab/open/put action after that.
+  - If you performed any walk/grab/open/put action after reaching the handover door, you must walk to the agreed `door_id` again before receiving or handing over.
+  - If handover fails with "too far", both the giver and receiver must walk to the agreed valid `door_id` again on the next step. Do not assign or choose `receive`, `handover`, `grab`, `put`, or `open` until both sides have re-walked to the door.
+  - Do NOT walk away from the door if you are in the process of handover once you arrived.
+
+PLAN_BLOCK_PHYSICAL_ACTIONS_UNRESTRICTED: |
+  ## Physical Actions
+
+  ### Valid Actions
+  - put one object you are holding on a surface or into a container
+  - open an enclosure
+  - grab an object
+  - walk to something visible
+  - walk to another room (allowed rooms: $ALLOWED_ROOMS$)
+
+  ### Interaction Rules
+  - When an action involves any object, specify the name and a clear visual/location description.
+  - You may interact (walk to, grab, put, open) with objects ONLY when they are currently visible.
+  - If the object is not visible, first walk to the room includes it. If still occluded, walk to a nearby visible landmark (e.g., table/counter) until the target becomes visible.
+  - You can hold at most TWO objects at the same time. If both hands are full, put one object down before grabbing another object or opening an enclosure.
+  - Do NOT repeat a failed action unless the environment has changed. Do NOT repeating the same action consecutively.
+  - You may walk directly to any room using the room name except the current one.
+
+  ## ACTION Output Format
+
+  Output a single JSON object, with no extra text:
+  {
+    "action": "<one of: walk / walk_to_room / grab / put_in / put_on / open >",
+    "parameter_1": {"name": "<class name>", "description": "<short description>"} | null,
+    "parameter_2": {"name": "<class name>", "description": "<short description>"} | null,
+    "room": "<bedroom|livingroom|kitchen|bathroom>" | null
+  }
+
+  Parameter rules:
+  - walk/open/grab: use "parameter_1" only.
+  - put_in/put_on: "parameter_1" = held object, "parameter_2" = container/surface.
+  - walk_to_room: set "room" and set both parameters to null.
+  - Actions with no parameters: set "parameter_1", "parameter_2", and "room" to null.
+
+PLAN_BLOCK_PHYSICAL_ACTIONS_RESTRICTED: |
+  ## Physical Actions
+
+  ### Valid Actions
+  - put one object you are holding on a surface or into a container
+  - open an enclosure
+  - grab an object
+  - walk to something visible (including doors — use door_id when walking to a door)
+  - walk to another room (allowed rooms: $ALLOWED_ROOMS$)
+  - handover: give one object you are holding to another agent ($OTHER_NAMES$). You must be at the door if in different rooms.
+  - receive: wait to accept an object from another agent. Use this when the giver is about to handover. Also use this to stay at the door while waiting for the other agent to arrive (You should be walk to the door first to make sure you are at the door).
+
+  ### Interaction Rules
+  - When an action involves any object, specify the name and a clear visual/location description.
+  - You may interact (walk to, grab, put, open) with objects ONLY when they are currently visible and in your allowed rooms.
+  - If the object is not visible, first walk to the room that includes it. If still occluded, walk to a nearby visible landmark (e.g., table/counter) until the target becomes visible.
+  - You can hold at most TWO objects at the same time. If both hands are full, put one object down before grabbing another object or opening an enclosure.
+  - Do NOT repeat a failed action unless the environment has changed.
+  - You may walk directly to any allowed room, except the current one. You cannot move to rooms that are not allowed.
+
+  ### Handover Rules
+  - Cross-room handover is valid ONLY when both agents are at the connecting door.
+  - Walk to the door FIRST, then communicate to confirm both sides are ready.
+  - The giver uses `handover` and the receiver uses `receive` on the **same step**.
+  - After arriving at the door, do NOT walk away. Use `receive` to wait in place until the other agent arrives.
+  - Use `receive` only when your latest successful movement to the handover point was `walk` to the agreed door_id and you have not done any walk/grab/open/put action since then.
+  - If handover fails ("too far"), communicate to verify positions and retry. Both agents should walk to the door first before start the handover and receive.(the last action should be walk to the door)
+
+  ## ACTION Output Format
+
+  Output a single JSON object, with no extra text:
+  {
+    "action": "<one of: walk / walk_to_room / grab / put_in / put_on / open / handover / receive>",
+    "parameter_1": {"name": "<class name>", "description": "<short description>"} | null,
+    "parameter_2": {"name": "<class name or agent name>", "description": "<short description>"} | null,
+    "room": "<bedroom|livingroom|kitchen|bathroom>" | null,
+    "door_id": <integer> | null
+  }
+
+  Parameter rules:
+  - walk/open/grab: use "parameter_1" only. If walking to a door, set "parameter_1" to {"name": "door", "description": "<short description>"} and set "door_id" to the door id.
+  - put_in/put_on: "parameter_1" = held object, "parameter_2" = container/surface.
+  - handover: "parameter_1" = held object, "parameter_2" = {"name": "<receiver agent name>", "description": "receiver agent"}.
+  - receive: set "parameter_1", "parameter_2", "room", and "door_id" ALL to null.
+  - walk_to_room: set "room" only, set all other fields to null.
+  - Actions with no parameters: set "parameter_1", "parameter_2", "room", and "door_id" to null.
+
+PLAN_BLOCK_MEMORY_SINGLE: |
+  ## Memory Update
+
+  ### Rules:
+  - Store only task-relevant objects, containers, and target locations.
+  - Update memory using the current observation, executed actions and feedback.
+  - If new information conflicts with existing memory, correct the memory to reflect the latest belief.
+  - Keep memory concise and consistent. Memory represents the current belief state, not a full history. Do not invent objects.
+
+  ### MEMORY Output format
+  Memory MUST be a JSON object with no extra text:
+  {
+    "livingroom": {
+      "exploration": "unexplored|partially_explored|explored",
+      "objects": [{"name": "...", "description": "...", "location": "...", "status": "..."}],
+      "containers": [{"name": "...", "description": "...", "location": "...", "status": "unchecked|checked|open|closed"}],
+      "notes": []
+    },
+    "kitchen": { ... },
+    "bedroom": { ... },
+    "bathroom": { ... },
+    "global": {
+      "notes": []
+    }
+  }
+
+PLAN_BLOCK_MEMORY_MULTI: |
+  ## Memory Update
+
+  ### Rules:
+  - Store only task-relevant objects, containers, and target locations.
+  - Update memory using the current observation, executed actions, feedback, and reliable messages from other agents.
+  - If new information conflicts with existing memory, correct the memory to reflect the latest belief.
+  - Keep memory concise and consistent. Memory represents the current belief state, not a full history. Do not invent objects.
+  - Use global.communication_summary to keep a concise running summary of still-useful communication facts, assignments, and commitments. Do not copy raw dialogue into it.
+
+  ### MEMORY Output format
+  Memory MUST be a JSON object with no extra text:
+  {
+    "livingroom": {
+      "exploration": "unexplored|partially_explored|explored",
+      "objects": [{"name": "...", "description": "...", "location": "...", "status": "..."}],
+      "containers": [{"name": "...", "description": "...", "location": "...", "status": "unchecked|checked|open|closed"}],
+      "notes": []
+    },
+    "kitchen": { ... },
+    "bedroom": { ... },
+    "bathroom": { ... },
+    "global": {
+      "notes": [],
+      "agent_locations": {},
+      "communication_summary": ""
+    }
+  }
+
+PLAN_BLOCK_MEMORY_MULTI_RESTRICTED: |
+  ## Memory Update
+
+  ### Rules:
+  - Store only task-relevant objects, containers, and target locations.
+  - Update memory using the current observation, executed actions, feedback, and reliable messages from other agents.
+  - If new information conflicts with existing memory, correct the memory to reflect the latest belief.
+  - Keep memory concise and consistent. Memory represents the current belief state, not a full history. Do not invent objects.
+  - Use global.communication_summary to keep a concise running summary of still-useful communication facts, assignments, and commitments. Do not copy raw dialogue into it.
+  - Room access is restricted in this task. You can record the allowed rooms for each agent in `global.agent_allowed_rooms`.
+
+  ### MEMORY Output format
+  Memory MUST be a JSON object with no extra text:
+  {
+    "livingroom": {
+      "exploration": "unexplored|partially_explored|explored",
+      "objects": [{"name": "...", "description": "...", "location": "...", "status": "..."}],
+      "containers": [{"name": "...", "description": "...", "location": "...", "status": "unchecked|checked|open|closed"}],
+      "notes": []
+    },
+    "kitchen": { ... },
+    "bedroom": { ... },
+    "bathroom": { ... },
+    "global": {
+      "notes": [],
+      "agent_locations": {},
+      "communication_summary": "",
+      "agent_allowed_rooms": {"<agent_name>": ["<room>", ...]}
+    }
+  }
+
+COMM_BLOCK_INTRO: |
+  You are an embodied agent in a 3D simulated environment.
+
+  At this stage, based on the current observation, memory, history, and task goal,
+  you must decide whether to send ONE helpful message to other agents.
+
+COMM_BLOCK_OUTPUT: |
+  ## Output Format
+
+  [THINKING]
+  Brief reasoning for the message decision.
+
+  [MESSAGE]
+  <NO_MESSAGE> or message text
+
+DISCUSS_FIRST_ROUND_BLOCK_INTRO: |
+  You are an embodied agent in a 3D simulated environment.
+
+  This is the FIRST discussion round for the current step.
+  Based on the current observation, memory, dialogue, and task goal, decide whether more discussion is needed before acting.
+
+DISCUSS_TEXT_ROUND_BLOCK_INTRO: |
+  You are an embodied agent in a 3D simulated environment.
+
+  This is a FOLLOW-UP text-only discussion round for the current step.
+  Use the dialogue so far and your private local context from the first round to decide whether more discussion is needed before acting.
+
+DISCUSS_BLOCK_RULES: |
+  ## Discussion
+
+  You may send ONE helpful discussion message to the other agents. 
+  Your goal is to complete the task with the **smallest number of action steps**. Therefore, avoid waiting idly or letting others wait. We should all actively engage and search for tasks to contribute to.
+  The valid actions we can take are: $VALID_ACTIONS$. Each agent can only perform one action at a time, and can hold at most two objects at a time.
+
+  READY rules:
+  - Output <READY> if, from your perspective, no more discussion is needed before agents take actions.
+  - Output <CONTINUE> if more discussion is still needed.
+
+  MESSAGE rules:
+  - If you have nothing useful to add, output exactly <NO_MESSAGE>.
+  - Otherwise output one concise, task-relevant message.
+  - Do not fabricate visual facts.
+
+DISCUSS_FIRST_ROUND_BLOCK_OUTPUT: |
+  ## Output Format
+
+  [THINKING]
+  Brief reasoning for the discussion decision.
+
+  [READY]
+  <READY> or <CONTINUE>
+
+  [MESSAGE]
+  <NO_MESSAGE> or message text
+
+  [LOCAL_CONTEXT]
+  A short private visual grounding note for your own later text-only discussion rounds.
+
+  [LOCAL_CONTEXT] must be the final block. Do not add extra text.
+
+DISCUSS_TEXT_ROUND_BLOCK_OUTPUT: |
+  ## Output Format
+
+  [THINKING]
+  Brief reasoning for the discussion decision.
+
+  [READY]
+  <READY> or <CONTINUE>
+
+  [MESSAGE]
+  <NO_MESSAGE> or message text
+
+  [MESSAGE] must be the final block. Do not add extra text.
+
+WORKER_REPORT_BLOCK_INTRO: |
+  You are an embodied agent in a 3D simulated environment.
+
+  At this stage, you must send ONE report message to the leader agent: $LEADER_NAME$ and wait for the leader's assignment.
+  Base the report on your current observation, memory, dialogue, and task goal.
+
+WORKER_REPORT_BLOCK_RULES: |
+  ## Report
+
+  Report only task-relevant observations, status, useful feedback and progress to the leader (Agent 0).
+  If any action fails, you should report the failure and possible reason to the leader.
+
+  MESSAGE rules:
+  - If you have nothing useful to report, output exactly <NO_MESSAGE>.
+  - Otherwise output one concise report message to the leader.
+  - Do not invent visual facts.
+
+WORKER_REPORT_BLOCK_OUTPUT: |
+  ## Output Format
+
+  [THINKING]
+  Brief reasoning for the report.
+
+  [MESSAGE]
+  <NO_MESSAGE> or message text
+
+  [MESSAGE] must be the final block. Do not add extra text.
+
+WORKER_REPORT_RESTRICTED_HANDOVER_HINT: |
+  ## Restricted handover reporting
+
+  In this task, room access may require door handovers. Your door status must be exact.
+  - Explicitly report any failed handover, "too far", or empty receive.
+  - Only say you are at / ready at a door if your latest successful action was `walk` to that exact `door_id` and you have taken no action since.
+  - Any later walk / grab / open / put cancels door confirmation; you must re-walk to the exact door before receive / handover.
+  - If unsure, report uncertainty and ask the leader to reassign a walk to that exact `door_id`.
+
+LEADER_ASSIGNMENT_BLOCK_INTRO: |
+  You are an embodied agent in a 3D simulated environment.
+
+  At this stage, you are acting as the leader for this step.
+  Based on your current observation, memory, dialogue, and the workers' reports,
+  assign exactly ONE next-step instruction to each agent, including yourself.
+
+LEADER_ASSIGNMENT_BLOCK_INTRO_VISUAL: |
+  You are an embodied agent in a 3D simulated environment.
+
+  At this stage, you are acting as the leader for this step.
+  You have access to a combined image that shows every agent's current observation views (your own view on top, followed by each worker's view, each row labeled with the agent name).
+  Together with your memory, dialogue, and the workers' text reports, use this shared visual information to assign exactly ONE next-step instruction to each agent, including yourself.
+
+LEADER_ASSIGNMENT_BLOCK_INTRO_VISUAL_ONLY: |
+  You are an embodied agent in a 3D simulated environment.
+
+  At this stage, you are acting as the leader for this step.
+  You have access to a combined image that shows every agent's current observation views (your own view on top, followed by each worker's view, each row labeled with the agent name).
+  Read the workers' situations directly from this shared image, and combine it with your memory and prior dialogue to assign exactly ONE next-step instruction to each agent, including yourself.
+
+LEADER_ASSIGNMENT_BLOCK_RULES: |
+  ## Assignment
+
+  You must output exactly one assignment for each agent in this list:
+  $AGENT_NAMES$
+  Your goal is to complete the task with the **smallest number of action steps**. Therefore, avoid letting any agent stay idle or wait for other agents.
+
+  Rules:
+  - Use the exact agent names from the list.
+  - Set "type" to "assignment" for every item.
+  - Give concise, actionable instructions for THIS step only.
+  - The valid actions we can take are: $VALID_ACTIONS$. Each agent can only perform one action at a time, and can hold at most two objects at a time. Get full use of all agents' actions and hands to minimize the total number of action steps.
+  - Do not assign an agent to do multiple unrelated things in one message.
+  - If the worker reports failure, you should assign a different action. Do not let the worker retry the failed action if the environment has not changed.
+
+LEADER_ASSIGNMENT_BLOCK_OUTPUT: |
+  ## Output Format
+
+  [THINKING]
+  Brief reasoning for the assignments.
+
+  [MESSAGES]
+  A JSON array like:
+  [
+    {"receiver": "<exact agent name>", "type": "assignment", "content": "..."}
+  ]
+
+  [MESSAGES] must be the final block. Do not add extra text.
+
+ACTION_MEMORY_BLOCK_INTRO: |
+  You are an embodied agent in a 3D simulated environment.
+
+  At this stage, based on the current observation, memory, current communication context, and task goal,
+  you must produce TWO outputs in order:
+  1) Decide the NEXT single physical action.
+  2) Update the memory.
+
+ACTION_MEMORY_BLOCK_INTRO_SHARED: |
+  You are an embodied agent in a 3D simulated environment.
+
+  You coordinate with other agents ONLY through a shared memory object. There is no current-round dialogue in this mode.
+
+  At this stage, based on the current observation, shared memory, previous action feedback, and task goal,
+  you must produce TWO outputs in order:
+  1) Decide the NEXT single physical action.
+  2) Update the shared memory with observed facts, your current plan, and your own status.
+
+  Do not write your next action as completed in memory. Completion must come from feedback or the current completion progress.
+
+ACTION_MEMORY_BLOCK_OUTPUT: |
+  ## Output Format
+
+  [THINKING]
+  Brief reasoning for the next action.
+
+  [ACTION]
+  The JSON action object. Only one action block is allowed.
+
+  [THINKING]
+  Brief reasoning for the memory update.
+
+  [MEMORY]
+  The updated memory JSON.
+
+  [MEMORY] must be the final block. Do not add extra text.
+
+PLAN_BLOCK_INPUTS_BASE: |
+  ## Inputs
+
+  **Current memory:**
+  $MEMORY$$DIALOGUE_SECTION$
+
+  **Successful actions history:**
+  $ACTION_HISTORY$
+
+  **Last action feedback:**
+  $FEEDBACK$
+
+  **The last action (executed vs intended):**
+  $LAST_ACTION$$RESTRICTION_SECTION$
+
+  **Current room:**
+  You are now standing in the $CURRENT_ROOM$.
+  Most of your current observation images are in this room.
+
+  **Holding objects:**
+  $HOLDING_OBJECTS$
+
+  **Task goal:**
+  $TASK_GOAL$
+
+  **Current completion progress:** (This is the ONLY ground-truth of task completion. Do NOT infer completion from observations or memory—always rely on this)
+  $TASK_PROGRESS$
+
+PLAN_INPUT_HISTORICAL_DIALOGUE_SECTION: |
+  **Historical dialogue:**
+  $HISTORICAL_DIALOGUE$
+
+PLAN_INPUT_CURRENT_ROUND_DIALOGUE_SECTION: |
+
+  **Current round dialogue:**
+  $CURRENT_ROUND_DIALOGUE$
+
+PLAN_INPUT_LOCAL_CONTEXT_SECTION: |
+
+  **Private local context from the first discussion round:**
+  $LOCAL_CONTEXT$
+
+PLAN_INPUT_RESTRICTION_SECTION: |
+
+  **Allowed rooms for you:**
+  $ALLOWED_ROOMS$
+
+  **Department topology:**
+  $DEPARTMENT_TOPOLOGY$
+
+ACTION_DESC_RESOLVE_PROMPT: |
+  You are resolving object_ids for an action based on the class name and descriptions.
+
+  You are given:
+  - An action with object names and descriptions.
+  - A list of visible candidate objects with ids and class names.
+  - A list of holding objects with ids and class names.
+  - Two images of the same views:
+    1) Raw RGB image.
+    2) Bbox-annotated image with class names and object_ids.
+
+  Rules:
+  1. Only choose ids from candidates or holding_objects.
+  2. Match by class name and description. (The class name is preferred over the description. But if the description makes it very clear that the class-name-matched object is not the referred object, and another candidate is obviously a better fit, should you select that other candidate.)
+  3. For put_in / put_on, parameter_ids[0] MUST be the held object, parameter_ids[1] is the target container/surface.
+  4. If multiple candidates match, choose the best and most reasonablt fit (if open a fridge, choose the closed one).
+  5. If the action is walk_to_room, return the room name in parameter_ids.
+  6. If unsure, choose the closest matching candidate rather than returning null.
+
+  Output JSON only (no extra text):
+  {
+    "action": "<action>",
+    "parameter_ids": [<int>, <int>] OR [<int>] OR ["<room>"] OR []
+  }
+
+  Input JSON:
+  $RESOLVE_INPUT$
+
+PLAN_BLOCK_ANTI_STAGNATION: |
+  ## Exploration Strategy
+
+  The target objects are randomly distributed in all rooms — kitchen items (plates, forks, glasses) may be in the livingroom, bedroom, or bathroom, and vice versa.
+
+  ### Rules:
+  - **Systematically explore ALL rooms.** After checking all containers and surfaces in the current room, mark it as "explored" in memory and immediately move to the next unexplored room.
+  - **Check surfaces, not only containers.** Target objects may be on tables, counters, desks, sofas, or other open surfaces — not only inside containers.
+  - **Do NOT stay in one room for too long.** If you have spent more than 6 actions in the same room without finding a target object, move to a different room immediately.
+  - **Avoid repeating failed actions.** If you grabbed the wrong object, put it down and carefully re-examine the image before grabbing again. Do not grab the same wrong object twice.
+  - **Do NOT keep repeating the same action consecutively.** If an action has already occurred multiple times in a row in the action history, you must choose a completely different action.
+
+WORKER_REPORT_RESTRICTED_ROOMS_HINT: |
+  ## Room-access reporting
+
+  In this task, each agent can only access certain rooms.
+  - **you MUST state your allowed rooms** so the leader knows which rooms you can access. For example: "My allowed rooms are: kitchen, livingroom. I am currently in the kitchen...."
+
+LEADER_ASSIGNMENT_RESTRICTED_ROOMS_HINT: |
+  ## Room-access awareness
+
+  In this task, each agent can only access certain rooms. You and each worker may have DIFFERENT allowed rooms.
+  - Pay close attention to the workers and yourself allowed rooms and the department topology when assigning tasks. Only assign tasks to agents that can access the room.
+  - When the task requires placing objects in rooms an agent cannot enter, coordinate handovers between agents at connecting doors. But if any worker can complete some subtask in their allowed rooms, you should assign them to do first.
+  - If a worker reports handover failed but also says they are at the door, still re-walk both sides once before retrying. This prevents repeated too-far loops caused by stale or incorrect door-location reports.
+  - A correct handover assignment should name the exact valid door_id. Avoid vague instructions such as "wait there", "receive", or "meet at the door" after a failure.
+
+PLAN_BLOCK_MEMORY_SHARED: |
+  ## Shared Memory Update
+
+  Every agent reads and writes to this SAME memory object. You can use this memory to coordinate with other agents.
+
+  ### Rules:
+  - Store only task-relevant objects, containers, and target locations.
+  - Update memory using the current observation and previous action feedback. Do NOT record the action you are about to output as completed yet.
+  - If new information conflicts with existing memory, correct the memory to reflect the latest belief.
+  - Keep memory concise and consistent. Memory represents the current belief state, not a full history. Do not invent objects.
+  - Keep agent_locations, agent_plans, agent_status, agent_holding, task_progress, and claims updated so other agents can coordinate.
+  - Read shared memory before acting to avoid redundant exploration and action conflicts.
+  - Prefer unassigned subtasks instead of repeating work another agent is already doing. If all visible subtasks are claimed, deliver any object you hold to its target, explore a different unchecked place, or wait instead of duplicating the same target.
+  - Track multi-count goals by required, satisfied, and remaining counts. Mark a subtask satisfied only when the environment feedback or satisfied task list confirms the object is at the target.
+  - Use claims to reserve one concrete next subtask per agent, including the object name, source location, target location, and state: "planned", "holding", "delivering", or "done".
+  - Do not update or guess another agent's status, holdings, or completed actions.
+
+  ### MEMORY Output format
+  Memory MUST be a JSON object with no extra text:
+  {
+    "livingroom": {
+      "exploration": "unexplored|partially_explored|explored",
+      "objects": [{"name": "...", "description": "...", "location": "...", "status": "..."}],
+      "containers": [{"name": "...", "description": "...", "location": "...", "status": "unchecked|checked|open|closed"}],
+      "notes": []
+    },
+    "kitchen": { ... },
+    "bedroom": { ... },
+    "bathroom": { ... },
+    "global": {
+      "notes": [],
+      "agent_locations": {"<agent_name>": "", ...},
+      "agent_plans": {"<agent_name>": "", ...},
+      "agent_status": {"<agent_name>": "", ...},
+      "agent_holding": {"<agent_name>": [{"name": "...", "source": "...", "target": "..."}], ...},
+      "task_progress": {"<goal_key>": {"required": 0, "satisfied": 0, "remaining": 0}},
+      "claims": [{"agent": "<agent_name>", "object": "...", "source": "...", "target": "...", "state": "planned|holding|delivering|done"}],
+      "coordination_board": ["", ...]
+    }
+  }
