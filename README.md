@@ -46,7 +46,7 @@ Then edit `eval/agents/.env` with your OpenAI-compatible endpoint, model keys, a
 
 ## VirtualHome API
 
-This repository includes the modified VirtualHome Python API used by MECoBench. After installing it with `pip install -e virtualhome`, verify the import:
+This repository includes the modified Python API based on [VirtualHome](https://github.com/xavierpuigf/virtualhome), as used by MECoBench. After installing it with `pip install -e virtualhome`, verify the import:
 
 ```bash
 python -c "import virtualhome.simulation.unity_simulator as u; print(u.UnityCommunication)"
