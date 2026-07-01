@@ -1,4 +1,9 @@
 # MECoBench
+<p align="center">
+  <a href="https://arxiv.org/abs/2606.31966"><strong>Paper</strong></a>
+  &nbsp;|&nbsp;
+  <a href="https://huggingface.co/datasets/q-i-n-g/MECoBench"><strong>Dataset</strong></a>
+</p>
 
 Repository of MECoBench: A Systematic Study of Multimodal Agent Collaboration in Embodied Environments.
 
@@ -144,3 +149,19 @@ Useful environment variables:
 - `VLM_MAIN_MODEL`, `VLM_LEADER_MODEL`, `VLM_WORKER_MODEL`, `VLM_RESOLVE_MODEL`, `VLM_EMBEDDING_MODEL`: model aliases defined in `eval/agents/models.json`.
 
 Results are written as per-case `result.json` files plus a batch-level `summary.json`.
+
+## Citation
+
+If you find MECoBench useful in your research, please cite our work:
+
+```bibtex
+@misc{liu2026mecobenchsystematicstudymultimodal,
+  title         = {MECoBench: A Systematic Study of Multimodal Agent Collaboration in Embodied Environments},
+  author        = {Qingyun Liu and Jiwen Zhang and Jingyi Hu and Siyuan Wang and Zhongyu Wei},
+  year          = {2026},
+  eprint        = {2606.31966},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.MA},
+  url           = {https://arxiv.org/abs/2606.31966}
+}
+```
